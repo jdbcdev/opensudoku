@@ -44,8 +44,24 @@ public class CellCollection {
 
 	/**
 	 * See {@link #DATA_PATTERN_VERSION_1} and {@link #serialize()}.
+	 * Notes stored as an array of numbers
 	 */
 	public static int DATA_VERSION_1 = 1;
+
+	/**
+	 * Notes stored as a single number.
+	 */
+	public static int DATA_VERSION_2 = 2;
+
+	/**
+	 * There was a bug in the version 2. Notes stored with an additional bar character |.
+	 * So, it was impossible to get the import regex matched.
+	 * The V2 regex was modified to allow double bar symbols
+	 * Bug was fixed, but version has to be changed
+	 */
+	public static int DATA_VERSION_3 = 3;
+
+	public static int DATA_VERSION = DATA_VERSION_3;
 
 	// TODO: An array of ints is a much better than an array of Integers, but this also generalizes to the fact that two parallel arrays of ints are also a lot more efficient than an array of (int,int) objects
 	// Cell's data.
@@ -142,6 +158,19 @@ public class CellCollection {
 	public Cell getCell(int rowIndex, int colIndex) {
 		return mCells[rowIndex][colIndex];
 	}
+
+
+	public Cell findFirstCell(int val) {
+		for (int r = 0; r < SUDOKU_SIZE; r++) {
+			for (int c = 0; c < SUDOKU_SIZE; c++) {
+				Cell cell = mCells[r][c];
+				if (cell.getValue() == val)
+					return cell;
+			}
+		}
+		return null;
+	}
+
 
 	public void markAllCellsAsValid() {
 		mOnChangeEnabled = false;
@@ -288,12 +317,12 @@ public class CellCollection {
 	 * @param data
 	 * @return
 	 */
-	public static CellCollection deserialize(StringTokenizer data) {
+	public static CellCollection deserialize(StringTokenizer data, int version ) {
 		Cell[][] cells = new Cell[SUDOKU_SIZE][SUDOKU_SIZE];
 
 		int r = 0, c = 0;
 		while (data.hasMoreTokens() && r < 9) {
-			cells[r][c] = Cell.deserialize(data);
+			cells[r][c] = Cell.deserialize(data, version);
 			c++;
 
 			if (c == 9) {
@@ -319,9 +348,12 @@ public class CellCollection {
 			throw new IllegalArgumentException("Cannot deserialize Sudoku, data corrupted.");
 		}
 
-		if (lines[0].equals("version: 1")) {
-			StringTokenizer st = new StringTokenizer(lines[1], "|");
-			return deserialize(st);
+		String line = lines[0];
+		if (line.startsWith("version:")) {
+            String[] kv = line.split(":");
+		    int version = Integer.parseInt(kv[1].trim());
+            StringTokenizer st = new StringTokenizer(lines[1], "|");
+            return deserialize(st, version);
 		} else {
 			return fromString(data);
 		}
@@ -376,7 +408,9 @@ public class CellCollection {
 	 * @return
 	 */
 	public void serialize(StringBuilder data) {
-		data.append("version: 1\n");
+		data.append("version: ");
+		data.append(DATA_VERSION);
+		data.append("\n");
 
 		for (int r = 0; r < SUDOKU_SIZE; r++) {
 			for (int c = 0; c < SUDOKU_SIZE; c++) {
@@ -388,6 +422,8 @@ public class CellCollection {
 
 	private static Pattern DATA_PATTERN_VERSION_PLAIN = Pattern.compile("^\\d{81}$");
 	private static Pattern DATA_PATTERN_VERSION_1 = Pattern.compile("^version: 1\\n((?#value)\\d\\|(?#note)((\\d,)+|-)\\|(?#editable)[01]\\|){0,81}$");
+	private static Pattern DATA_PATTERN_VERSION_2 = Pattern.compile("^version: 2\\n((?#value)\\d\\|(?#note)(\\d){1,3}\\|{1,2}(?#editable)[01]\\|){0,81}$");
+	private static Pattern DATA_PATTERN_VERSION_3 = Pattern.compile("^version: 3\\n((?#value)\\d\\|(?#note)(\\d){1,3}\\|(?#editable)[01]\\|){0,81}$");
 
 	/**
 	 * Returns true, if given <code>data</code> conform to format of given data version.
@@ -401,10 +437,28 @@ public class CellCollection {
 			return DATA_PATTERN_VERSION_PLAIN.matcher(data).matches();
 		} else if (dataVersion == DATA_VERSION_1) {
 			return DATA_PATTERN_VERSION_1.matcher(data).matches();
+		} else if (dataVersion == DATA_VERSION_2) {
+			return DATA_PATTERN_VERSION_2.matcher(data).matches();
+		} else if (dataVersion == DATA_VERSION_3) {
+			return DATA_PATTERN_VERSION_3.matcher(data).matches();
 		} else {
 			throw new IllegalArgumentException("Unknown version: " + dataVersion);
 		}
 	}
+
+    /**
+     * Returns true, if given <code>data</code> conform to format of any version.
+     *
+     * @param data
+     * @return
+     */
+    public static boolean isValid(String data) {
+        return (DATA_PATTERN_VERSION_PLAIN.matcher(data).matches() ||
+                DATA_PATTERN_VERSION_1.matcher(data).matches() ||
+				DATA_PATTERN_VERSION_2.matcher(data).matches() ||
+				DATA_PATTERN_VERSION_3.matcher(data).matches()
+                );
+    }
 
 	public void addOnChangeListener(OnChangeListener listener) {
 		if (listener == null) {

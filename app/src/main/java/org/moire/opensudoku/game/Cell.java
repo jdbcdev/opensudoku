@@ -229,10 +229,10 @@ public class Cell {
 	 * @param data
 	 * @return
 	 */
-	public static Cell deserialize(StringTokenizer data) {
+	public static Cell deserialize(StringTokenizer data, int version) {
 		Cell cell = new Cell();
 		cell.setValue(Integer.parseInt(data.nextToken()));
-		cell.setNote(CellNote.deserialize(data.nextToken()));
+		cell.setNote(CellNote.deserialize(data.nextToken(), version));
 		cell.setEditable(data.nextToken().equals("1"));
 
 		return cell;
@@ -243,11 +243,11 @@ public class Cell {
 	 * created by {@link #serialize(StringBuilder)} or {@link #serialize()} method).
 	 * earlier.
 	 *
-	 * @param note
+	 * @param cellData
 	 */
 	public static Cell deserialize(String cellData) {
 		StringTokenizer data = new StringTokenizer(cellData, "|");
-		return deserialize(data);
+		return deserialize(data, CellCollection.DATA_VERSION);
 	}
 
 
@@ -260,10 +260,9 @@ public class Cell {
 	public void serialize(StringBuilder data) {
 		data.append(mValue).append("|");
 		if (mNote == null || mNote.isEmpty()) {
-			data.append("-").append("|");
+			data.append("0").append("|");
 		} else {
 			mNote.serialize(data);
-			data.append("|");
 		}
 		data.append(mEditable ? "1" : "0").append("|");
 	}

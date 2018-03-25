@@ -63,6 +63,7 @@ public class SudokuBoardView extends View {
 	private boolean mHighlightWrongVals = true;
 	private boolean mHighlightTouchedCell = true;
 	private boolean mAutoHideTouchedCellHint = true;
+	private boolean mHighlightSimilarCells = true;
 
 	private SudokuGame mGame;
 	private CellCollection mCells;
@@ -83,6 +84,7 @@ public class SudokuBoardView extends View {
 	private Paint mBackgroundColorReadOnly;
 	private Paint mBackgroundColorTouched;
 	private Paint mBackgroundColorSelected;
+	private Paint mBackgroundColorHighlighted;
 
 	private Paint mCellValueInvalidPaint;
 
@@ -111,6 +113,7 @@ public class SudokuBoardView extends View {
 		mBackgroundColorReadOnly = new Paint();
 		mBackgroundColorTouched = new Paint();
 		mBackgroundColorSelected = new Paint();
+		mBackgroundColorHighlighted = new Paint();
 
 		mCellValuePaint.setAntiAlias(true);
 		mCellValueReadonlyPaint.setAntiAlias(true);
@@ -130,6 +133,7 @@ public class SudokuBoardView extends View {
 		setBackgroundColorReadOnly(a.getColor(R.styleable.SudokuBoardView_backgroundColorReadOnly, NO_COLOR));
 		setBackgroundColorTouched(a.getColor(R.styleable.SudokuBoardView_backgroundColorTouched, Color.rgb(50, 50, 255)));
 		setBackgroundColorSelected(a.getColor(R.styleable.SudokuBoardView_backgroundColorSelected, Color.YELLOW));
+		setBackgroundColorHighlighted(a.getColor(R.styleable.SudokuBoardView_backgroundColorHighlighted, Color.GREEN));
 
 		a.recycle();
 	}
@@ -196,7 +200,6 @@ public class SudokuBoardView extends View {
 
 	public void setBackgroundColorTouched(int color) {
 		mBackgroundColorTouched.setColor(color);
-		mBackgroundColorTouched.setAlpha(100);
 	}
 
 	public int getBackgroundColorSelected() {
@@ -205,7 +208,14 @@ public class SudokuBoardView extends View {
 
 	public void setBackgroundColorSelected(int color) {
 		mBackgroundColorSelected.setColor(color);
-		mBackgroundColorSelected.setAlpha(100);
+	}
+
+	public int getBackgroundColorHighlighted() {
+		return mBackgroundColorHighlighted.getColor();
+	}
+
+	public void setBackgroundColorHighlighted(int color) {
+		mBackgroundColorHighlighted.setColor(color);
 	}
 
 	public void setGame(SudokuGame game) {
@@ -275,6 +285,14 @@ public class SudokuBoardView extends View {
 		return mAutoHideTouchedCellHint;
 	}
 
+	public void setHighlightSimilarCell(boolean highlightSimilarCell) {
+		mHighlightSimilarCells = highlightSimilarCell;
+	}
+
+	public boolean getHighlightSimilarCell() {
+		return mHighlightSimilarCells;
+	}
+
 	/**
 	 * Registers callback which will be invoked when user taps the cell.
 	 *
@@ -310,6 +328,10 @@ public class SudokuBoardView extends View {
 		if (mOnCellSelectedListener != null) {
 			mOnCellSelectedListener.onCellSelected(cell);
 		}
+	}
+
+	public void invokeOnCellSelected() {
+		onCellSelected(mSelectedCell);
 	}
 
 	@Override
@@ -423,6 +445,12 @@ public class SudokuBoardView extends View {
 			float numberAscent = mCellValuePaint.ascent();
 			float noteAscent = mCellNotePaint.ascent();
 			float noteWidth = mCellWidth / 3f;
+
+			int selectedValue = 0;
+			if (mHighlightSimilarCells && mSelectedCell != null) {
+				selectedValue = mSelectedCell.getValue();
+			}
+
 			for (int row = 0; row < 9; row++) {
 				for (int col = 0; col < 9; col++) {
 					Cell cell = mCells.getCell(row, col);
@@ -431,41 +459,26 @@ public class SudokuBoardView extends View {
 					cellTop = Math.round((row * mCellHeight) + paddingTop);
 
 					// draw read-only field background
-					if (!cell.isEditable() && hasBackgroundColorReadOnly) {
-						if (mBackgroundColorReadOnly.getColor() != NO_COLOR) {
-							canvas.drawRect(
+					if (!cell.isEditable() && hasBackgroundColorReadOnly &&
+                        (mSelectedCell == null || mSelectedCell != cell)) {
+                            if (mBackgroundColorReadOnly.getColor() != NO_COLOR) {
+                                canvas.drawRect(
+                                    cellLeft, cellTop,
+                                    cellLeft + mCellWidth, cellTop + mCellHeight,
+                                    mBackgroundColorReadOnly);
+                            }
+					}
+
+					// highlight similar cells
+					if (selectedValue != 0 && selectedValue == cell.getValue() &&
+						(mSelectedCell == null || mSelectedCell != cell)) {
+						    if (mBackgroundColorHighlighted.getColor() != NO_COLOR) {
+							    canvas.drawRect(
 									cellLeft, cellTop,
 									cellLeft + mCellWidth, cellTop + mCellHeight,
-									mBackgroundColorReadOnly);
-						}
+									mBackgroundColorHighlighted);
+						    }
 					}
-
-					// draw cell Text
-					int value = cell.getValue();
-					if (value != 0) {
-						Paint cellValuePaint = cell.isEditable() ? mCellValuePaint : mCellValueReadonlyPaint;
-
-						if (mHighlightWrongVals && !cell.isValid()) {
-							cellValuePaint = mCellValueInvalidPaint;
-						}
-						canvas.drawText(Integer.toString(value),
-								cellLeft + mNumberLeft,
-								cellTop + mNumberTop - numberAscent,
-								cellValuePaint);
-					} else {
-						if (!cell.getNote().isEmpty()) {
-							Collection<Integer> numbers = cell.getNote().getNotedNumbers();
-							for (Integer number : numbers) {
-								int n = number - 1;
-								int c = n % 3;
-								int r = n / 3;
-								//canvas.drawText(Integer.toString(number), cellLeft + c*noteWidth + 2, cellTop + noteAscent + r*noteWidth - 1, mNotePaint);
-								canvas.drawText(Integer.toString(number), cellLeft + c * noteWidth + 2, cellTop + mNoteTop - noteAscent + r * noteWidth - 1, mCellNotePaint);
-							}
-						}
-					}
-
-
 				}
 			}
 
@@ -494,6 +507,40 @@ public class SudokuBoardView extends View {
 						mBackgroundColorTouched);
 			}
 
+            for (int row = 0; row < 9; row++) {
+                for (int col = 0; col < 9; col++) {
+                    Cell cell = mCells.getCell(row, col);
+
+                    cellLeft = Math.round((col * mCellWidth) + paddingLeft);
+                    cellTop = Math.round((row * mCellHeight) + paddingTop);
+
+                    // draw cell Text
+                    int value = cell.getValue();
+                    if (value != 0) {
+                        Paint cellValuePaint = cell.isEditable() ? mCellValuePaint : mCellValueReadonlyPaint;
+
+                        if (mHighlightWrongVals && !cell.isValid()) {
+                            cellValuePaint = mCellValueInvalidPaint;
+                        }
+
+                        canvas.drawText(Integer.toString(value),
+                                cellLeft + mNumberLeft,
+                                cellTop + mNumberTop - numberAscent,
+                                cellValuePaint);
+                    } else {
+                        if (!cell.getNote().isEmpty()) {
+                            Collection<Integer> numbers = cell.getNote().getNotedNumbers();
+                            for (Integer number : numbers) {
+                                int n = number - 1;
+                                int c = n % 3;
+                                int r = n / 3;
+                                //canvas.drawText(Integer.toString(number), cellLeft + c*noteWidth + 2, cellTop + noteAscent + r*noteWidth - 1, mNotePaint);
+                                canvas.drawText(Integer.toString(number), cellLeft + c * noteWidth + 2, cellTop + mNoteTop - noteAscent + r * noteWidth - 1, mCellNotePaint);
+                            }
+                        }
+                    }
+                }
+            }
 		}
 
 		// draw vertical lines
@@ -676,7 +723,7 @@ public class SudokuBoardView extends View {
 	 * @param col Columnd index of cell which should be selected.
 	 * @return True, if cell was successfuly selected.
 	 */
-	private boolean moveCellSelectionTo(int row, int col) {
+	public boolean moveCellSelectionTo(int row, int col) {
 		if (col >= 0 && col < CellCollection.SUDOKU_SIZE
 				&& row >= 0 && row < CellCollection.SUDOKU_SIZE) {
 			mSelectedCell = mCells.getCell(row, col);
